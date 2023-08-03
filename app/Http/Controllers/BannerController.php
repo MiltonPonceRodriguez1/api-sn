@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use App\Models\Banner;
 
+use function PHPUnit\Framework\isNull;
 
 class BannerController extends Controller
 {
@@ -20,11 +22,20 @@ class BannerController extends Controller
      */
     public function index()
     {
-        $banners = Banner::all()->load('user')->sortByDesc('created_at');
+        $month = Banner::where('banner_plan_id', '=', 1)->orderByDesc('created_at')->get();
+        $month = $month->load('user');
+
+        $quarter = Banner::where('banner_plan_id', '=', 2)->orderByDesc('created_at')->get();
+        $quarter = $quarter->load('user');
+
+        $halfYear = Banner::where('banner_plan_id', '=', 3)->orderByDesc('created_at')->get();
+        $halfYear = $halfYear->load('user');
 
         return response()->json([
             'status' => 'success',
-            'banners' => $banners
+            'month' => $month,
+            'quarter' => $quarter,
+            'halfYear' => $halfYear,
         ], 200);
     }
 
@@ -51,27 +62,59 @@ class BannerController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['status' => 'error'], 400);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No se envio un Banner Valido!'
+            ], 400);
         }
 
+        $finishDate = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d H:i:s'));
+        $bannerPlanID = (int) $request->input('banner_plan_id');
+
+        switch ($bannerPlanID) {
+            case 1:
+                $finishDate = $finishDate->addMonth(1);
+                break;
+            case 2:
+                $finishDate = $finishDate->addMonth(3);
+                break;
+            case 3:
+                $finishDate = $finishDate->addMonth(6);
+                break;
+            default:
+                break;
+        }
+
+        // ? INSTANCIAMOS EL BANNER A GUARDAR EN LA BBDD
+        $banner = new Banner();
+        $banner->user_id = (int) $request->input('user_id');
+        $banner->banner_plan_id = $bannerPlanID;
+        $banner->company = $request->input('company');
+        $banner->phone = $request->input('phone') !== null ? $request->input('phone') : null;
+        $banner->email = $request->input('email') !== null ? $request->input('email') : null;
+        $banner->website = $request->input('website') !== null ? $request->input('website') : null;
+        $banner->active = true;
+        $banner->limit_date = $finishDate;
+
+        // ? PROCESAMIENTO DEL BANNER
         $image = $request->file('file0');
-        $id = $request->session()->get('id');
 
         $extension = explode('/', $image->getMimeType());
-        $image_name = $id.'_'.'banner_'.time().'.'.$extension[1];
+        $imageName = $banner->user_id.'_'.'banner_'.time().'.'.$extension[1];
+        $banner->banner = $imageName;
 
-        \Storage::disk('banners')->put($image_name, \File::get($image));
+        \Storage::disk('banners')->put($imageName, \File::get($image));
 
-        $banner = Banner::create([
-            'user_id' => $id,
-            'banner' => $image_name
+        $result = $banner->save();
+
+        // ? EN CASO DE NO HABESE GUARDADO CORRECTAMENTE EL BANNER
+        if ( !$result ) return response()->json([ 'status' => 'error', 'message' => 'Error al guardar el Banner, comunicaque con soporte para solucionar tu problema!' ]);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Banner publicado Correctamente!',
+            'banner' => $banner
         ]);
-
-        if (is_object($banner) && $banner->wasRecentlyCreated) {
-            return redirect('');
-        } else {
-            return view('errors.500');
-        }  
     }
 
     /**
