@@ -10,6 +10,7 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\PaidPostController;
 use App\Http\Controllers\BannerPlanController;
+use App\Http\Controllers\PostController;
 
 /*
 |--------------------------------------------------------------------------
@@ -68,4 +69,11 @@ Route::prefix('paid-post')->group(function () {
 // ? RUTAS  BANNERS PLANS
 Route::prefix('banner-plan')->group(function () {
     Route::get('', [BannerPlanController::class, 'index']);
+});
+
+// ? RUTAS  POST
+Route::prefix('post')->group(function () {
+    Route::get('', [PostController::class, 'index']);
+    Route::post('', [PostController::class, 'store']);
+    Route::get('file/{filename}', [PostController::class, 'getFile']);
 });
